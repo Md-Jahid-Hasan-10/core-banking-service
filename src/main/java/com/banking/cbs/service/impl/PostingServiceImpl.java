@@ -1,5 +1,6 @@
 package com.banking.cbs.service.impl;
 
+import com.banking.cbs.dto.CashRequest;
 import com.banking.cbs.config.CbsProperties;
 import com.banking.cbs.dto.PostTransferRequest;
 import com.banking.cbs.dto.PostingResponse;
@@ -33,6 +34,7 @@ import java.util.stream.Collectors;
 public class PostingServiceImpl implements PostingService {
 
     private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(2);
+    private static final String CASH = "CASH";
 
     private final LedgerAccountRepository accountRepository;
     private final LedgerTransactionRepository transactionRepository;
@@ -113,7 +115,7 @@ public class PostingServiceImpl implements PostingService {
         tx.setAmount(amount);
         tx.setFee(fee);
         tx.setStatus("POSTED");
-        transactionRepository.save(tx);
+        tx = transactionRepository.save(tx);
 
         entryRepository.save(LedgerEntry.of(
                 tx.getId(), from, EntryDirection.DEBIT, totalDebit, fromAccount.getBalance()));
@@ -125,6 +127,76 @@ public class PostingServiceImpl implements PostingService {
         }
 
         return toResponse(tx);
+    }
+    @Override
+    @Transactional
+    public PostingResponse postDeposit(CashRequest request) {
+        return postCash(request, TransactionType.DEPOSIT);
+    }
+
+    @Override
+    @Transactional
+    public PostingResponse postWithdrawal(CashRequest request) {
+        return postCash(request, TransactionType.WITHDRAWAL);
+    }
+
+    private PostingResponse postCash(CashRequest request, TransactionType type) {
+        boolean deposit = type == TransactionType.DEPOSIT;
+        String reference = request.referenceId().trim();
+        String number = request.accountNumber().trim();
+        BigDecimal amount = request.amount().setScale(2);
+
+        // Idempotency: the same referenceId must never move money twice.
+        Optional<LedgerTransaction> existing = transactionRepository.findByReferenceId(reference);
+        if (existing.isPresent()) {
+            LedgerTransaction previous = existing.get();
+            String previousAccount = deposit
+                    ? previous.getToAccountNumber()
+                    : previous.getFromAccountNumber();
+            boolean sameRequest = previous.getType() == type
+                    && number.equals(previousAccount)
+                    && amount.compareTo(previous.getAmount()) == 0;
+            if (!sameRequest) {
+                throw new DuplicateReferenceException("referenceId was already used with different details");
+            }
+            return toResponse(previous);
+        }
+
+        // Lock the account row so concurrent requests cannot overspend.
+        LedgerAccount account = accountRepository.findAllForUpdate(Set.of(number)).stream()
+                .findFirst()
+                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + number));
+
+        if (account.getStatus() != LedgerAccountStatus.ACTIVE) {
+            throw new InvalidPostingException("Account is not active");
+        }
+
+        if (deposit) {
+            account.setBalance(account.getBalance().add(amount));
+        } else {
+            if (account.getBalance().compareTo(amount) < 0) {
+                throw new InsufficientFundsException("Insufficient balance");
+            }
+            account.setBalance(account.getBalance().subtract(amount));
+        }
+
+        LedgerTransaction tx = new LedgerTransaction();
+        tx.setId(UUID.randomUUID());
+        tx.setReferenceId(reference);
+        tx.setType(type);
+        tx.setFromAccountNumber(deposit ? CASH : number);
+        tx.setToAccountNumber(deposit ? number : CASH);
+        tx.setAmount(amount);
+        tx.setFee(ZERO);
+        tx.setStatus("POSTED");
+        LedgerTransaction saved = transactionRepository.save(tx);
+
+        entryRepository.save(LedgerEntry.of(
+                saved.getId(), number,
+                deposit ? EntryDirection.CREDIT : EntryDirection.DEBIT,
+                amount, account.getBalance()));
+
+        return toResponse(saved);
     }
 
     private PostingResponse replay(LedgerTransaction existing, String from, String to,

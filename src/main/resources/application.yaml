@@ -24,4 +24,4 @@ app:
   cbs:
     # System account that receives transfer fees. Created automatically at startup.
     fee-account-number: FEE-INCOME
-    fee-account-currency: USD
+    fee-account-currency: BDT

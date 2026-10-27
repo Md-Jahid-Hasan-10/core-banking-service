@@ -1,6 +1,7 @@
 package com.banking.cbs.controller;
 
 import com.banking.cbs.dto.BalanceResponse;
+import com.banking.cbs.dto.CashRequest;
 import com.banking.cbs.dto.CreateLedgerAccountRequest;
 import com.banking.cbs.dto.PostTransferRequest;
 import com.banking.cbs.dto.PostingResponse;
@@ -49,5 +50,15 @@ public class InternalCbsController {
     @PostMapping("/transfers")
     public ResponseEntity<PostingResponse> postTransfer(@Valid @RequestBody PostTransferRequest request) {
         return ResponseEntity.ok(postingService.postTransfer(request));
+    }
+
+    @PostMapping("/deposits")
+    public ResponseEntity<PostingResponse> deposit(@Valid @RequestBody CashRequest request) {
+        return ResponseEntity.ok(postingService.postDeposit(request));
+    }
+
+    @PostMapping("/withdrawals")
+    public ResponseEntity<PostingResponse> withdraw(@Valid @RequestBody CashRequest request) {
+        return ResponseEntity.ok(postingService.postWithdrawal(request));
     }
 }
