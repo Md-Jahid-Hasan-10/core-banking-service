@@ -65,7 +65,7 @@ app:
       relay-interval-ms: 1000
 management:
   server:
-    port: 18083
+    port: 18084
   endpoints:
     web:
       exposure:
