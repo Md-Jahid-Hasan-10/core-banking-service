@@ -2,16 +2,50 @@ server:
   port: 8084
 
 spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: core-banking-service
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    listener:
+      ack-mode: record
+      concurrency: 3
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+        linger.ms: 0
+        max.block.ms: 5000
+        request.timeout.ms: 5000
+        delivery.timeout.ms: 10000
   application:
     name: core-banking-service
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/cbs_db}
-    username: ${DB_USERNAME:postgres}
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/cbs_db}
+    username: ${DB_USERNAME:banking_admin}
     password: ${DB_PASSWORD:postgres}
   jpa:
     hibernate:
       ddl-auto: update
     open-in-view: false
+    kafka:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      consumer:
+        group-id: core-banking-service
+        auto-offset-reset: earliest
+        enable-auto-commit: false
+      listener:
+        ack-mode: record
+        concurrency: 3
+      producer:
+        acks: all
+        properties:
+          enable.idempotence: true
+          linger.ms: 0
+          max.block.ms: 5000
+          request.timeout.ms: 5000
+          delivery.timeout.ms: 10000
 
 eureka:
   client:
@@ -22,6 +56,21 @@ eureka:
 
 app:
   cbs:
-    # System account that receives transfer fees. Created automatically at startup.
     fee-account-number: FEE-INCOME
-    fee-account-currency: BDT
+    fee-account-currency: USD
+    transit-account-number: TRANSFER-TRANSIT
+    transit-account-currency: USD
+  messaging:
+      producer-name: core-banking-service
+      relay-interval-ms: 1000
+management:
+  server:
+    port: 18083
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true

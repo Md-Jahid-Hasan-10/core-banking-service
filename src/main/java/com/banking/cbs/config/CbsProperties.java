@@ -5,5 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "app.cbs")
 public record CbsProperties(
         String feeAccountNumber,
-        String feeAccountCurrency
+        String feeAccountCurrency,
+        String transitAccountNumber,
+        String transitAccountCurrency
 ) {}
