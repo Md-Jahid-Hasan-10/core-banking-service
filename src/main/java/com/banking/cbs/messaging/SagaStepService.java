@@ -9,6 +9,8 @@ import com.banking.cbs.entity.LedgerAccountStatus;
 import com.banking.cbs.entity.LedgerEntry;
 import com.banking.cbs.entity.LedgerTransaction;
 import com.banking.cbs.entity.TransactionType;
+import com.banking.cbs.messaging.payload.BalanceCheckedPayload;
+import com.banking.cbs.messaging.payload.CheckBalanceCommand;
 import com.banking.cbs.messaging.payload.CreateLedgerAccountCommand;
 import com.banking.cbs.messaging.payload.DepositCommand;
 import com.banking.cbs.messaging.payload.DepositCompletedPayload;
@@ -401,6 +403,67 @@ public class SagaStepService {
         events.publish(TopicNames.CBS_EVENTS, number, "LedgerAccountCreated", number,
                 command.eventId(), new LedgerAccountCreatedPayload(number, currency));
         count("create", "completed");
+    }
+
+    // -------------------------------------------------------------- CheckBalance
+
+    /**
+     * Answers whether the account can cover a debit of amount + fee.
+     *
+     * <p>This is the early check of the saga. It runs after the fee is known and
+     * before the one-time password is requested, so a user is never sent a code
+     * for a transaction that cannot succeed. It does not move money: the
+     * authoritative check happens when the withdrawal is posted, because the
+     * balance can change between this check and the posting.
+     */
+    @Transactional
+    public void checkBalance(EventEnvelope command, CheckBalanceCommand cmd) {
+        String transferId = CommandValidation.text(cmd.transferId(), "transferId", 80);
+        CommandValidation.commandId(cmd.commandId(), transferId, "CHECK_BALANCE");
+        String number = CommandValidation.text(cmd.accountNumber(), "accountNumber", 50);
+        BigDecimal amount = CommandValidation.positiveAmount(cmd.amount(), "amount");
+        BigDecimal fee = CommandValidation.nonNegativeAmount(cmd.fee(), "fee");
+        BigDecimal required = amount.add(fee);
+
+        // The check moves no money, so it is not recorded in command_results.
+        // Every resend of the command is answered again with the balance of
+        // that moment, which is what the user needs to see. A second answer
+        // is harmless: the saga only accepts it while it still waits for the
+        // check.
+        Optional<LedgerAccount> found = accounts.findById(number);
+        if (found.isEmpty()) {
+            events.publish(TopicNames.CBS_EVENTS, transferId, "BalanceRejected", transferId,
+                    command.eventId(),
+                    new FailurePayload(transferId, "ACCOUNT_NOT_FOUND", "Account not found: " + number));
+            count("checkBalance", "rejected");
+            return;
+        }
+
+        LedgerAccount account = found.get();
+        BigDecimal available = account.getBalance();
+
+        if (account.getStatus() != LedgerAccountStatus.ACTIVE) {
+            events.publish(TopicNames.CBS_EVENTS, transferId, "BalanceRejected", transferId,
+                    command.eventId(),
+                    new FailurePayload(transferId, "ACCOUNT_INACTIVE", "Account is not active"));
+            count("checkBalance", "rejected");
+            return;
+        }
+
+        if (available.compareTo(required) < 0) {
+            events.publish(TopicNames.CBS_EVENTS, transferId, "BalanceRejected", transferId,
+                    command.eventId(),
+                    new FailurePayload(transferId, "INSUFFICIENT_FUNDS",
+                            "Insufficient balance. You have " + available.toPlainString()
+                                    + " available, but this needs " + required.toPlainString()));
+            count("checkBalance", "rejected");
+            return;
+        }
+
+        events.publish(TopicNames.CBS_EVENTS, transferId, "BalanceChecked", transferId,
+                command.eventId(),
+                new BalanceCheckedPayload(transferId, number, available, required));
+        count("checkBalance", "completed");
     }
 
     // ------------------------------------------------------------------- helpers

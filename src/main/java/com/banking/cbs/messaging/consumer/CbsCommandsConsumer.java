@@ -4,6 +4,7 @@ import com.banking.cbs.messaging.EventEnvelope;
 import com.banking.cbs.messaging.EventParser;
 import com.banking.cbs.messaging.SagaStepService;
 import com.banking.cbs.messaging.TopicNames;
+import com.banking.cbs.messaging.payload.CheckBalanceCommand;
 import com.banking.cbs.messaging.payload.CreateLedgerAccountCommand;
 import com.banking.cbs.messaging.payload.DepositCommand;
 import com.banking.cbs.messaging.payload.ReversalCommand;
@@ -37,6 +38,8 @@ public class CbsCommandsConsumer {
             case "Reversal" -> steps.reversal(envelope, parser.payload(envelope, ReversalCommand.class));
             case "CreateLedgerAccount" -> steps.createLedgerAccount(envelope,
                     parser.payload(envelope, CreateLedgerAccountCommand.class));
+            case "CheckBalance" -> steps.checkBalance(envelope,
+                    parser.payload(envelope, CheckBalanceCommand.class));
             default -> log.debug("Ignoring unknown command type {}", envelope.eventType());
         }
     }
