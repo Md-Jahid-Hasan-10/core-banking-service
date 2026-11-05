@@ -832,3 +832,18 @@ curl -s -X POST http://localhost:8084/internal/cbs/deposits \
   (`?accountNumbers=`).
 - **The `LedgerAccountCreated` event is published twice when an account is created twice** with the
   same currency. The duplicate is harmless (metric `cbs.steps{step=create,result=duplicate}`).
+
+# Core Banking Service
+
+**Part of the Banking Microservices Project**
+
+Developed and maintained by **Jahid Hasan**
+
+- **Author:** Jahid Hasan
+- **GitHub:** [Md-Jahid-Hasan-10](https://github.com/Md-Jahid-Hasan-10)
+- **Repository:** [core-banking-service](https://github.com/Md-Jahid-Hasan-10/core-banking-service)
+- **Project:** Banking Microservices
+- **Application Port:** `8084`
+- **Management/Metrics Port:** `18084`
+
+> The authoritative double-entry ledger of the bank. It owns the ledger tables and is the only component allowed to change account balances.
