@@ -10,6 +10,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import com.banking.cbs.observability.CurrentTrace;   // change the package for each service
 
 import java.time.LocalDateTime;
 import java.util.stream.Collectors;
@@ -18,6 +19,12 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    private final CurrentTrace currentTrace;
+
+    public GlobalExceptionHandler(CurrentTrace currentTrace) {
+        this.currentTrace = currentTrace;
+    }
 
     @ExceptionHandler(AccountNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(AccountNotFoundException ex) {
@@ -85,12 +92,21 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String message) {
-        ErrorResponse body = new ErrorResponse(
+        return build(status, status.name(), message);
+    }
+
+    private ResponseEntity<ErrorResponse> build(HttpStatus status, String code, String message) {
+        return ResponseEntity.status(status).body(body(status, code, message));
+    }
+
+    private ErrorResponse body(HttpStatus status, String code, String message) {
+        return new ErrorResponse(
                 LocalDateTime.now(),
                 status.value(),
                 status.getReasonPhrase(),
-                message
+                code,
+                message,
+                currentTrace.traceId()
         );
-        return ResponseEntity.status(status).body(body);
     }
 }
